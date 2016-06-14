@@ -242,7 +242,11 @@ func (v *Volume) Create(s FileCloneStrategy) (err error) {
 
 			l := path.Join(dir, path.Base(f))
 			if err := s.Clone(f, l); err != nil {
-				return err
+				//if cannot clone (hard link) fail back to use copy
+				cpCmd := exec.Command("cp", "-rf", f, l)
+				if err := cpCmd.Run(); err != nil {
+					return err
+				}
 			}
 			soname, err := obj.DynString(elf.DT_SONAME)
 			if err != nil {
