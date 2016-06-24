@@ -184,7 +184,11 @@ type dockerArgs struct {
 }
 
 func dockerCLIArgs(devs, vols []string) (*dockerArgs, error) {
-	devs, err := dockerCLIDevices(devs)
+	cdevs, err := nvidia.GetControlDevicePaths()
+	if err != nil {
+		return nil, err
+	}
+	devs, err = dockerCLIDevices(devs)
 	if err != nil {
 		return nil, err
 	}
@@ -195,7 +199,7 @@ func dockerCLIArgs(devs, vols []string) (*dockerArgs, error) {
 	return &dockerArgs{
 		VolumeDriver: nvidia.DockerPlugin,
 		Volumes:      vols,
-		Devices:      append(devs, nvidia.DeviceCtl, nvidia.DeviceUVM),
+		Devices:      append(cdevs, devs...),
 	}, nil
 }
 
@@ -227,7 +231,7 @@ func dockerCLIVolumes(names []string) ([]string, error) {
 	}
 	if len(names) == 1 && (names[0] == "*" || names[0] == "") {
 		for _, v := range Volumes {
-			vols = append(vols, fmt.Sprintf("%s_%s:%s:ro", v.Name, drv, v.Mountpoint))
+			vols = append(vols, fmt.Sprintf("%s_%s:%s:%s", v.Name, drv, v.Mountpoint, v.MountOptions))
 		}
 	} else {
 		for _, n := range names {
@@ -235,7 +239,7 @@ func dockerCLIVolumes(names []string) ([]string, error) {
 			if !ok {
 				return nil, fmt.Errorf("invalid volume: %s", n)
 			}
-			vols = append(vols, fmt.Sprintf("%s_%s:%s:ro", v.Name, drv, v.Mountpoint))
+			vols = append(vols, fmt.Sprintf("%s_%s:%s:%s", v.Name, drv, v.Mountpoint, v.MountOptions))
 		}
 	}
 	return vols, nil

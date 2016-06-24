@@ -47,16 +47,20 @@ install -m 644 -t %{buildroot}%{_unitdir} %{name}.service
 
 %post
 if [ $1 -eq 1 ]; then
+    echo "Configuring user"
     id -u %{nvidia_docker_user} >/dev/null 2>&1 || \
     useradd -r -M -d %{nvidia_docker_root} -s /usr/sbin/nologin -c "NVIDIA Docker plugin" %{nvidia_docker_user}
-    chown %{nvidia_docker_user}: %{nvidia_docker_root}
 fi
+echo "Setting up permissions"
+chown %{nvidia_docker_user}: %{nvidia_docker_root}
 setcap cap_fowner+pe %{_bindir}/nvidia-docker-plugin
 %systemd_post %{name}
 
 %preun
 if [ $1 -eq 0 ]; then
-    docker volume ls | awk -v drv=%{nvidia_docker_driver} '{if ($1 == drv) print $2}' | xargs -r docker volume rm || exit 1
+    echo "Purging NVIDIA volumes"
+    docker volume ls | awk -v drv=%{nvidia_docker_driver} '{if ($1 == drv) print $2}' | xargs -r docker volume rm ||
+        echo "Failed to remove NVIDIA volumes, ignoring"
     find %{nvidia_docker_root} ! -wholename %{nvidia_docker_root} -type d -empty -delete
 fi
 %systemd_preun %{name}
@@ -69,6 +73,14 @@ fi
 %systemd_postun_with_restart %{name}
 
 %changelog
+* Fri Jun 17 2016 NVIDIA CORPORATION <digits@nvidia.com> 1.0.0~rc.3-1
+- Support for Docker 1.12
+- Add volume mount options support to the nvidia package
+- Export the nvidia-uvm-tools device
+- Provide the libcuda.so symlink as part of the driver volume (Closes: #103)
+- Use relative symlinks inside the volumes
+- Disable CUDA unified memory
+
 * Sat May 28 2016 NVIDIA CORPORATION <digits@nvidia.com> 1.0.0~rc.2-1
 - Allow UUIDs to be used in NV_GPU and docker/cli RestAPI endpoint
 - Change the plugin usage with version information (Closes: #90)
