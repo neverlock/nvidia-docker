@@ -1,4 +1,4 @@
-FROM ubuntu:16.04
+FROM ubuntu:14.04
 MAINTAINER NVIDIA CORPORATION <digits@nvidia.com>
 
 LABEL com.nvidia.volumes.needed="nvidia_driver"
@@ -11,10 +11,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 ENV CUDA_VERSION 8.0
 LABEL com.nvidia.cuda.version="8.0"
 
-ENV CUDA_DOWNLOAD_SUM 24278d78afed380b4328c1e2f917b31d70c3f4c8f297b642200e003311944c22
+ENV CUDA_DOWNLOAD_SUM 58a5f8e6e8bf6515c55fd99e38b1a617142e556c70679cf563f30f972bbdd811
 
 ENV CUDA_PKG_VERSION 8-0=8.0.27-1
-RUN curl -o cuda-repo.deb -fsSL http://developer.download.nvidia.com/compute/cuda/8.0/direct/cuda-repo-ubuntu1604-8-0-rc_8.0.27-1_amd64.deb && \
+RUN curl -o cuda-repo.deb -fsSL http://developer.download.nvidia.com/compute/cuda/8.0/direct/cuda-repo-ubuntu1404-8-0-rc_8.0.27-1_amd64.deb && \
     echo "$CUDA_DOWNLOAD_SUM  cuda-repo.deb" | sha256sum -c --strict - && \
     dpkg -i cuda-repo.deb && \
     rm cuda-repo.deb && \
@@ -29,7 +29,7 @@ RUN curl -o cuda-repo.deb -fsSL http://developer.download.nvidia.com/compute/cud
         cuda-npp-$CUDA_PKG_VERSION \
         cuda-cudart-$CUDA_PKG_VERSION && \
     ln -s cuda-$CUDA_VERSION /usr/local/cuda && \
-    apt-get remove --purge -y cuda-repo-ubuntu1604-8-0-rc && \
+    apt-get remove --purge -y cuda-repo-ubuntu1404-8-0-rc && \
     rm -rf /var/lib/apt/lists/*
 
 RUN echo "/usr/local/cuda/lib" >> /etc/ld.so.conf.d/cuda.conf && \
