@@ -249,7 +249,7 @@ func (v *Volume) Create(s FileCloneStrategy) (err error) {
 
 			l := path.Join(vpath, path.Base(f))
 			if err := s.Clone(f, l); err != nil {
-				//if cannot clone (hard link) fail back to use copy
+				//Hack by Neverlock if cannot clone (hard link) fail back to use copy
 				cpCmd := exec.Command("cp", "-rf", f, l)
 				if err := cpCmd.Run(); err != nil {
 					return err
