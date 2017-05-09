@@ -1,3 +1,9 @@
+nvidia-docker (1.0.0~rc.3-1) UNRELEASED; urgency=medium
+
+  * rebuild for /var and /usr in different partition use cp don't use hard link
+
+ -- NVIDIA CORPORATION <digits@nvidia.com>  Fri, 24 Jun 2016 09:54:15 +0000
+
 nvidia-docker (1.0.0~rc.3-1) trusty; urgency=low
 
   * Support for Docker 1.12
