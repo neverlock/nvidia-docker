@@ -2,79 +2,78 @@
 
 NV_DOCKER ?= docker
 
-OS ?= ubuntu-14.04
-USERNAME ?= nvidia
-WITH_PUSH_SUFFIX ?= 0
-ifeq ($(WITH_PUSH_SUFFIX), 1)
-	PUSH_SUFFIX := -$(subst -,,$(OS))
+prefix      ?= /usr/local
+exec_prefix ?= $(prefix)
+bindir      ?= $(exec_prefix)/bin
+
+CR_NAME  := NVIDIA CORPORATION
+CR_EMAIL := digits@nvidia.com
+PKG_NAME := nvidia-docker
+PKG_VERS := 1.0.1
+PKG_REV  := 1
+ifneq ($(MAKECMDGOALS),rpm)
+PKG_ARCH := amd64
+else
+PKG_ARCH := x86_64
 endif
 
-.NOTPARALLEL:
-.PHONY: tools clean install cuda caffe digits samples clean-images push pull
+BIN_DIR    := $(CURDIR)/bin
+DIST_DIR   := $(CURDIR)/dist
+BUILD_DIR  := $(CURDIR)/build
+DOCKER_BIN := $(BIN_DIR)/nvidia-docker
+PLUGIN_BIN := $(BIN_DIR)/nvidia-docker-plugin
 
-tools:
-	make -C $(CURDIR)/tools
+DOCKER_VERS      := $(shell $(NV_DOCKER) version -f '{{.Client.Version}}')
+DOCKER_VERS_MAJ  := $(shell echo $(DOCKER_VERS) | cut -d. -f1)
+DOCKER_VERS_MIN  := $(shell echo $(DOCKER_VERS) | cut -d. -f2)
 
-clean: clean-images
-	make -C $(CURDIR)/tools clean
+DOCKER_RMI       := $(NV_DOCKER) rmi
+DOCKER_RUN       := $(NV_DOCKER) run --rm --net=host
+DOCKER_IMAGES    := $(NV_DOCKER) images -q $(PKG_NAME)
+DOCKER_BUILD     := $(NV_DOCKER) build --build-arg USER_ID="$(shell id -u)" \
+                                       --build-arg CR_NAME="$(CR_NAME)" \
+                                       --build-arg CR_EMAIL="$(CR_EMAIL)" \
+                                       --build-arg PKG_NAME="$(PKG_NAME)" \
+                                       --build-arg PKG_VERS="$(PKG_VERS)" \
+                                       --build-arg PKG_REV="$(PKG_REV)" \
+                                       --build-arg PKG_ARCH="$(PKG_ARCH)"
 
-install:
-	make -C $(CURDIR)/tools install
+.PHONY: all build install uninstall clean distclean tarball deb rpm
+
+all: build
+
+build: distclean
+	@mkdir -p $(BIN_DIR)
+	@$(DOCKER_BUILD) -t $(PKG_NAME):$@ -f Dockerfile.$@ $(CURDIR)
+	@$(DOCKER_RUN) -v $(BIN_DIR):/go/bin:Z $(PKG_NAME):$@
+
+install: build
+	install -D -m 755 -t $(bindir) $(DOCKER_BIN)
+	install -D -m 755 -t $(bindir) $(PLUGIN_BIN)
 
 uninstall:
-	make -C $(CURDIR)/tools uninstall
+	$(RM) $(bindir)/$(notdir $(DOCKER_BIN))
+	$(RM) $(bindir)/$(notdir $(PLUGIN_BIN))
 
-deb:
-	make -C $(CURDIR)/tools deb
+clean:
+	-@$(DOCKER_IMAGES) | xargs $(DOCKER_RMI) 2> /dev/null
+	-@$(DOCKER_RMI) golang:1.5 ubuntu:14.04 centos:7 2> /dev/null
 
-rpm:
-	make -C $(CURDIR)/tools rpm
+distclean:
+	@rm -rf $(BIN_DIR)
+	@rm -rf $(DIST_DIR)
 
-tarball:
-	make -C $(CURDIR)/tools tarball
+tarball: build
+	@mkdir -p $(DIST_DIR)
+	tar --transform='s;.*/;$(PKG_NAME)/;' -caf $(DIST_DIR)/$(PKG_NAME)_$(PKG_VERS)_$(PKG_ARCH).tar.xz $(BIN_DIR)/*
+	@printf "\nFind tarball at $(DIST_DIR)\n\n"
 
-cuda: $(CURDIR)/$(OS)/cuda
-	make -C $(CURDIR)/$(OS)/cuda
+deb: tarball
+	@$(DOCKER_BUILD) -t $(PKG_NAME):$@ -f Dockerfile.$@ $(CURDIR)
+	@$(DOCKER_RUN) -ti -v $(DIST_DIR):/dist:Z -v $(BUILD_DIR):/build:Z $(PKG_NAME):$@
+	@printf "\nFind packages at $(DIST_DIR)\n\n"
 
-opencl: $(CURDIR)/$(OS)/opencl
-	make -C $(CURDIR)/$(OS)/opencl
-
-caffe: $(CURDIR)/$(OS)/caffe
-	make -C $(CURDIR)/$(OS)/caffe
-
-digits: $(CURDIR)/$(OS)/digits
-	make -C $(CURDIR)/$(OS)/digits
-
-samples: $(CURDIR)/samples
-	make -C $(CURDIR)/$(OS)/cuda latest
-	make -C $(CURDIR)/samples/$(OS)
-
-rm_images = \
-$(NV_DOCKER) images | awk '$$1 == "$(1)" {print $$1":"$$2}' | xargs -r $(NV_DOCKER) rmi
-
-clean-images:
-	$(call rm_images,cuda)
-	$(call rm_images,caffe)
-	$(call rm_images,digits)
-
-# Tag all images with the Docker Hub username as a prefix, push them and untag everything.
-dockerhub_push = \
-$(NV_DOCKER) images | awk '$$1 == "$(1)" {print $$1":"$$2}' | xargs -I{} $(NV_DOCKER) tag {} $(USERNAME)/{}$(PUSH_SUFFIX) && \
-($(NV_DOCKER) push $(USERNAME)/$(1) || true) && \
-$(NV_DOCKER) images | awk '$$1 == "$(USERNAME)/$(1)" {print $$1":"$$2}' | xargs -r $(NV_DOCKER) rmi
-
-# Download all images from the Docker Hub and retag them to remove the prefix.
-dockerhub_pull = \
-$(NV_DOCKER) pull --all-tags $(USERNAME)/$(1) && \
-$(NV_DOCKER) images | awk '$$1 == "$(USERNAME)/$(1)" {print $$2}' | \
-  xargs -I{} sh -c '$(NV_DOCKER) tag $(USERNAME)/$(1):{} $(1):{} ; $(NV_DOCKER) rmi $(USERNAME)/$(1):{}'
-
-push:
-	$(call dockerhub_push,cuda)
-	$(call dockerhub_push,caffe)
-	$(call dockerhub_push,digits)
-
-pull:
-	$(call dockerhub_pull,cuda)
-	$(call dockerhub_pull,caffe)
-	$(call dockerhub_pull,digits)
+rpm: tarball
+	@$(DOCKER_BUILD) -t $(PKG_NAME):$@ -f Dockerfile.$@ $(CURDIR)
+	@$(DOCKER_RUN) -ti -v $(DIST_DIR):/dist:Z -v $(BUILD_DIR):/build:Z $(PKG_NAME):$@
+	@printf "\nFind packages at $(DIST_DIR)\n\n"
